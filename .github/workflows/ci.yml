@@ -47,10 +47,15 @@ jobs:
           grep -q "api.mddtech.cn/p" "$CCPKIT_HOME/.claude/settings.json"
           grep -q "model_provider" "$CCPKIT_HOME/.codex/config.toml"
           grep -q "OPENAI_API_KEY" "$CCPKIT_HOME/.codex/auth.json"
-          # add a second profile with only one client, then switch back (backup path)
-          python ccpkit.py add solo -y --claude-key sk-test-2222222222 --use --client claude
+          # add a second profile with only the Claude line, then switch (exercises backup path)
+          python ccpkit.py add solo -y \
+            --claude-base https://api.anthropic.com --claude-key sk-test-2222222222 --use --client claude
           ls "$CCPKIT_HOME/.claude/" | grep -q "ccpkit-bak"
           python ccpkit.py restore --client claude
+          # a profile without base_url must warn instead of writing silently
+          python ccpkit.py add incomplete -y --claude-key sk-test-3333333333 --use --client claude \
+            | tee /dev/stderr | grep -q "claude_base"
+          python ccpkit.py remove incomplete -y
           python ccpkit.py remove solo -y
           python ccpkit.py remove ci -y
           echo "smoke test passed"

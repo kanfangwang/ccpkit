@@ -525,6 +525,7 @@ def cmd_add(a):
     for k, v in fields.items():
         if v is not None and v != "":
             p[k] = v.strip() if isinstance(v, str) else v
+    p["name"] = name
     if not (p.get("claude_key") or p.get("codex_key")):
         err("至少要配置一条线路(key 不能为空)")
         sys.exit(2)
@@ -561,14 +562,14 @@ def apply_profile(db: dict, name: str, client: str = "both") -> None:
         w = write_claude(prof)
         if w:
             written += [("Claude Code", x) for x in w]
-        elif client == "claude":
-            warn("该配置没有 claude_base / claude_key,跳过 Claude Code")
+        else:
+            warn(_missing_hint(prof, "claude", client))
     if client in ("both", "codex"):
         w = write_codex(prof)
         if w:
             written += [("Codex CLI", x) for x in w]
-        elif client == "codex":
-            warn("该配置没有 codex_base / codex_key,跳过 Codex CLI")
+        else:
+            warn(_missing_hint(prof, "codex", client))
     db["current"] = db.get("current") or {}
     if prof.get("claude_key"):
         db["current"]["claude"] = name
@@ -580,6 +581,17 @@ def apply_profile(db: dict, name: str, client: str = "both") -> None:
             print(f"   {dim(who)} → {path}")
     else:
         warn("没有写入任何配置")
+
+
+def _missing_hint(prof: dict, kind: str, client: str) -> str:
+    base, key = prof.get(f"{kind}_base"), prof.get(f"{kind}_key")
+    who = "Claude Code" if kind == "claude" else "Codex CLI"
+    if not key and not base:
+        return f"该配置没有 {kind} 线路,跳过 {who}"
+    if not base:
+        return (f"{who} 缺少 {kind}_base,未写入。请补上:"
+                f"ccpkit add {prof.get('name', '<名字>')} --{kind}-base <地址>")
+    return f"{who} 缺少 {kind}_key,未写入,跳过"
 
 
 def cmd_use(a):
