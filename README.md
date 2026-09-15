@@ -34,17 +34,17 @@ Pick one:
 
 ```bash
 # 1) pipx (recommended)
-pipx install git+https://github.com/<you>/ccpkit.git
+pipx install git+https://github.com/kanfangwang/ccpkit.git
 
 # 2) uv
-uvx --from git+https://github.com/<you>/ccpkit.git ccpkit --help
+uvx --from git+https://github.com/kanfangwang/ccpkit.git ccpkit --help
 
 # 3) plain python — just download the file
-curl -LO https://raw.githubusercontent.com/<you>/ccpkit/main/ccpkit.py
+curl -LO https://raw.githubusercontent.com/kanfangwang/ccpkit/main/ccpkit.py
 python ccpkit.py --help
 
 # 4) Windows PowerShell one-liner
-irm https://raw.githubusercontent.com/<you>/ccpkit/main/ccpkit.py -OutFile ccpkit.py; python ccpkit.py --help
+irm https://raw.githubusercontent.com/kanfangwang/ccpkit/main/ccpkit.py -OutFile ccpkit.py; python ccpkit.py --help
 ```
 
 ## Quick start

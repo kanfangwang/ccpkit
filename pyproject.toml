@@ -24,8 +24,8 @@ dependencies = []
 dev = []
 
 [project.urls]
-Homepage = "https://github.com/<you>/ccpkit"
-Issues = "https://github.com/<you>/ccpkit/issues"
+Homepage = "https://github.com/kanfangwang/ccpkit"
+Issues = "https://github.com/kanfangwang/ccpkit/issues"
 
 [project.scripts]
 ccpkit = "ccpkit:main"
