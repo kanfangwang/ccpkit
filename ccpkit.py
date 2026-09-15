@@ -49,6 +49,37 @@ _ENC = (getattr(sys.stdout, "encoding", "") or "").lower()
 UNICODE_OK = ("utf" in _ENC)
 OK_MARK, WARN_MARK, ERR_MARK = ("✓ ", "! ", "✗ ") if UNICODE_OK else ("[OK] ", "[!] ", "[x] ")
 
+# ---------------------------------------------------------------- presets
+# Presets only fill base_url / default model. The API key is always yours to provide.
+PRESETS = {
+    "anthropic": {
+        "label": "Anthropic official",
+        "claude_base": "https://api.anthropic.com",
+        "homepage": "https://console.anthropic.com",
+    },
+    "openai": {
+        "label": "OpenAI official",
+        "codex_base": "https://api.openai.com/v1",
+        "homepage": "https://platform.openai.com",
+    },
+    "mdd": {
+        "label": "MDD API (relay example)",
+        "claude_base": "https://api.mddtech.cn/p",
+        "claude_model": "claude-sonnet-4-6",
+        "codex_base": "https://api.mddtech.cn/p/v1",
+        "codex_model": "gpt-5.5",
+        "homepage": "https://api.mddtech.cn/portal",
+    },
+}
+PRESET_ALIAS = {"mdd-relay": "mdd", "mdd-switch": "mdd", "mddswitch": "mdd"}
+
+
+def resolve_preset(name: str):
+    if not name:
+        return None, None
+    key = PRESET_ALIAS.get(name.strip().lower(), name.strip().lower())
+    return key, PRESETS.get(key)
+
 # ---------------------------------------------------------------- utils
 
 def _home() -> Path:
@@ -295,12 +326,23 @@ def parse_models(body: bytes):
 
 def cmd_add(a):
     db = load_db()
-    name = a.name
+    pname, preset = resolve_preset(getattr(a, "preset", None))
+    if getattr(a, "preset", None) and not preset:
+        err(f"未知的 preset: {a.preset}(可用: {', '.join(PRESETS)})")
+        sys.exit(2)
+    name = a.name or pname or "default"
     p = db["profiles"].get(name, {})
     fields = {
         "claude_base": a.claude_base, "claude_key": a.claude_key, "claude_model": a.claude_model,
         "codex_base": a.codex_base, "codex_key": a.codex_key, "codex_model": a.codex_model,
     }
+    if preset:
+        for k, v in preset.items():
+            if k in fields and not fields.get(k):
+                fields[k] = v
+        print(f"使用预设 {bold(pname)} — {preset.get('label','')}")
+        if preset.get("homepage"):
+            print(dim(f"   该线路的 API key 请到 {preset['homepage']} 获取"))
     if not a.yes and not any(fields.values()):
         print(bold(f"添加配置 [{name}]") + dim("  (直接回车跳过某一项)"))
         if confirm("配置 Claude Code 线路?"):
@@ -462,6 +504,21 @@ def cmd_env(a):
     print("\n".join(lines))
 
 
+def cmd_presets(a):
+    print(bold("内置预设(只预填地址和默认模型,key 需要你自己提供)\n"))
+    for key, p in PRESETS.items():
+        print(f"  {bold(key):<20}{p.get('label','')}")
+        if p.get("claude_base"):
+            print(f"      Claude: {p['claude_base']}")
+        if p.get("codex_base"):
+            print(f"      Codex : {p['codex_base']}")
+        if p.get("homepage"):
+            print(dim(f"      key   : {p['homepage']}"))
+    if PRESET_ALIAS:
+        print(dim("\n别名: " + ", ".join(f"{k}→{v}" for k, v in PRESET_ALIAS.items())))
+    print(dim("\n用法: ccpkit add <名字> --preset <预设> --claude-key sk-xxx --codex-key sk-yyy --use"))
+
+
 def cmd_doctor(a):
     db = load_db()
     names = [a.name] if a.name else list(db["profiles"].keys())
@@ -559,12 +616,16 @@ def build_parser():
         sp.add_argument("--notes")
 
     sp = sub.add_parser("add", help="新增/修改一个配置")
-    sp.add_argument("name")
+    sp.add_argument("name", nargs="?", help="配置名(配合 --preset 可省略)")
     add_profile_args(sp)
+    sp.add_argument("--preset", help=f"内置预设: {', '.join(PRESETS)}")
     sp.add_argument("-y", "--yes", action="store_true", help="全部用命令行参数,不交互")
     sp.add_argument("--use", action="store_true", help="保存后立即切换")
     sp.add_argument("--client", choices=["both", "claude", "codex"], default="both")
     sp.set_defaults(func=cmd_add)
+
+    sp = sub.add_parser("presets", help="列出内置预设线路")
+    sp.set_defaults(func=cmd_presets)
 
     sp = sub.add_parser("use", help="切换到某个配置")
     sp.add_argument("name")

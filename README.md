@@ -58,6 +58,11 @@ ccpkit add myrelay \
 # save and switch to it
 ccpkit add myrelay ... --use
 
+# start from a preset instead (presets only pre-fill URLs; the key is always yours)
+ccpkit presets
+ccpkit add mdd --preset mdd --claude-key sk-xxx --codex-key sk-yyy --use
+ccpkit add official --preset anthropic --claude-key sk-ant-... --use
+
 # switch later
 ccpkit use myrelay
 
@@ -85,6 +90,18 @@ Example `doctor` output:
           - gpt-5.5
 全部正常
 ```
+
+## Providers & presets
+
+Works with any Anthropic-compatible or OpenAI-compatible endpoint: official APIs,
+relays/mirrors, or your own gateway. Built-in presets only pre-fill base URLs and a
+default model — **your key is always your own**: [`docs/providers.md`](docs/providers.md).
+
+| Preset | Claude base | Codex base |
+|---|---|---|
+| `anthropic` | `https://api.anthropic.com` | – |
+| `openai` | – | `https://api.openai.com/v1` |
+| `mdd` (alias `mdd-relay`) | `https://api.mddtech.cn/p` | `https://api.mddtech.cn/p/v1` |
 
 ## What it writes
 
