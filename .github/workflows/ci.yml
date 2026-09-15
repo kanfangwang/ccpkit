@@ -36,26 +36,62 @@ jobs:
           CCPKIT_CODEX_DIR: ${{ runner.temp }}/ccpkit-ci
         run: |
           set -e
+
+          # git-bash on Windows receives Windows-style paths (D:\a\_temp); convert
+          # them to POSIX so shell tools and file checks behave the same everywhere.
+          if command -v cygpath >/dev/null 2>&1; then
+            CCPKIT_HOME=$(cygpath -u "$CCPKIT_HOME"); export CCPKIT_HOME
+            CCPKIT_CLAUDE_DIR=$(cygpath -u "$CCPKIT_CLAUDE_DIR"); export CCPKIT_CLAUDE_DIR
+            CCPKIT_CODEX_DIR=$(cygpath -u "$CCPKIT_CODEX_DIR"); export CCPKIT_CODEX_DIR
+          fi
+          rm -rf "$CCPKIT_HOME"; mkdir -p "$CCPKIT_HOME"
+
+          echo "::group::version / presets"
           python ccpkit.py --version
-          python ccpkit.py presets | tee /dev/stderr | grep -q "mdd"
+          python ccpkit.py presets | grep -q "mdd"
+          echo "::endgroup::"
+
+          echo "::group::add from preset + switch"
           python ccpkit.py add ci --preset mdd \
             --claude-key sk-test-1234567890 --codex-key sk-test-0987654321 -y --use
           python ccpkit.py list
           python ccpkit.py show ci
           python ccpkit.py env ci --shell bash | grep -q ANTHROPIC_BASE_URL
-          python ccpkit.py env ci --shell powershell | grep -q 'OPENAI_API_KEY'
-          grep -q "api.mddtech.cn/p" "$CCPKIT_HOME/.claude/settings.json"
-          grep -q "model_provider" "$CCPKIT_HOME/.codex/config.toml"
-          grep -q "OPENAI_API_KEY" "$CCPKIT_HOME/.codex/auth.json"
-          # add a second profile with only the Claude line, then switch (exercises backup path)
+          python ccpkit.py env ci --shell powershell | grep -q OPENAI_API_KEY
+          echo "::endgroup::"
+
+          echo "::group::assert written config (cross-platform)"
+          python - <<'PY'
+          import json, os, pathlib
+          home = pathlib.Path(os.environ["CCPKIT_HOME"])
+          claude = json.loads((home / ".claude" / "settings.json").read_text(encoding="utf-8"))
+          assert claude["env"]["ANTHROPIC_BASE_URL"].startswith("https://api.mddtech.cn/p"), claude
+          assert claude["env"]["ANTHROPIC_AUTH_TOKEN"], claude
+          cfg = (home / ".codex" / "config.toml").read_text(encoding="utf-8")
+          assert "model_provider" in cfg and "[model_providers.ccpkit]" in cfg, cfg
+          auth = json.loads((home / ".codex" / "auth.json").read_text(encoding="utf-8"))
+          assert auth.get("OPENAI_API_KEY"), auth
+          print("config assertions OK")
+          PY
+          echo "::endgroup::"
+
+          echo "::group::backup + restore + actionable warning"
           python ccpkit.py add solo -y \
             --claude-base https://api.anthropic.com --claude-key sk-test-2222222222 --use --client claude
-          ls "$CCPKIT_HOME/.claude/" | grep -q "ccpkit-bak"
+          python - <<'PY'
+          import os, pathlib
+          d = pathlib.Path(os.environ["CCPKIT_HOME"]) / ".claude"
+          names = [f.name for f in d.iterdir()]
+          assert any("ccpkit-bak" in n for n in names), names
+          print("backup OK:", [n for n in names if "ccpkit-bak" in n][0])
+          PY
           python ccpkit.py restore --client claude
-          # a profile without base_url must warn instead of writing silently
+          # a profile without base_url must warn (and mention the field) instead of writing silently
           python ccpkit.py add incomplete -y --claude-key sk-test-3333333333 --use --client claude \
-            | tee /dev/stderr | grep -q "claude_base"
+            | grep -q "claude_base"
           python ccpkit.py remove incomplete -y
           python ccpkit.py remove solo -y
           python ccpkit.py remove ci -y
+          echo "::endgroup::"
+
           echo "smoke test passed"
