@@ -23,6 +23,23 @@ jobs:
           python ccpkit.py --version
           python ccpkit.py presets
 
+      - name: Sync version from the tag (single source of truth)
+        run: |
+          python - <<'PY'
+          import os, pathlib, re
+          v = os.environ["GITHUB_REF_NAME"].lstrip("v")
+          for path, pat in (("pyproject.toml", r'^version = ".*"$'),
+                            ("ccpkit.py", r'^VERSION = ".*"$')):
+              p = pathlib.Path(path)
+              s = p.read_text(encoding="utf-8")
+              new, n = re.subn(pat, f'version = "{v}"' if path.endswith(".toml") else f'VERSION = "{v}"',
+                               s, count=1, flags=re.M)
+              assert n == 1, f"version line not found in {path}"
+              p.write_text(new, encoding="utf-8")
+          print("version ->", v)
+          PY
+          python ccpkit.py --version
+
       - name: Build wheel
         run: |
           python -m pip install --quiet --upgrade build

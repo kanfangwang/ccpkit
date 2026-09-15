@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 ccpkit - Claude Code / Codex CLI provider profile switcher
@@ -35,7 +35,7 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 MANAGED_BEGIN = "# >>> ccpkit begin"
 MANAGED_END = "# <<< ccpkit end"
 
