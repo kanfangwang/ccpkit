@@ -322,6 +322,175 @@ def parse_models(body: bytes):
     return uniq
 
 
+# ---------------------------------------------------------------- bench
+
+DEFAULT_BENCH_PROMPT = "Reply with exactly: OK"
+
+
+def _claude_messages_url(base: str) -> str:
+    b = base.rstrip("/")
+    return f"{b}/messages" if b.endswith("/v1") else f"{b}/v1/messages"
+
+
+def _codex_responses_url(base: str) -> str:
+    b = base.rstrip("/")
+    return f"{b}/responses" if b.endswith("/v1") else f"{b}/v1/responses"
+
+
+def _sse_post(url: str, key: str, payload: dict, timeout: float = 120.0):
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(url, data=data, headers={
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream",
+        "Authorization": f"Bearer {key}",
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+        "User-Agent": f"ccpkit/{VERSION}",
+    })
+    return urllib.request.urlopen(req, timeout=timeout)
+
+
+def _bench_once(kind: str, base: str, key: str, model: str, prompt: str,
+                stream: bool, timeout: float) -> dict:
+    """One measurement. Returns {ttft, total, out, ok, err, url}."""
+    if kind == "claude":
+        url = _claude_messages_url(base)
+        payload = {
+            "model": model or "claude-sonnet-4-6",
+            "max_tokens": 64,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+    else:
+        url = _codex_responses_url(base)
+        payload = {
+            "model": model or "gpt-5.5",
+            "input": prompt,
+            "max_output_tokens": 64,
+        }
+    if stream:
+        payload["stream"] = True
+    t0 = time.time()
+    ttft = None
+    out_tokens = 0
+    err = None
+    try:
+        resp = _sse_post(url, key, payload, timeout)
+        if stream:
+            for raw in resp:
+                line = raw.decode("utf-8", "ignore").strip()
+                if not line.startswith("data:"):
+                    continue
+                body = line[5:].strip()
+                if not body or body == "[DONE]":
+                    if body == "[DONE]":
+                        break
+                    continue
+                try:
+                    ev = json.loads(body)
+                except Exception:
+                    continue
+                if isinstance(ev, dict):
+                    if ev.get("error"):
+                        err = str(ev["error"])[:200]
+                        break
+                    if kind == "claude":
+                        if ttft is None and ev.get("type") == "content_block_delta":
+                            d = ev.get("delta") or {}
+                            if d.get("text"):
+                                ttft = time.time() - t0
+                        usage = ev.get("usage") or (ev.get("message") or {}).get("usage")
+                        if isinstance(usage, dict) and usage.get("output_tokens"):
+                            out_tokens = usage["output_tokens"]
+                        if ev.get("type") == "message_stop":
+                            break
+                    else:
+                        if ttft is None and ev.get("type") in (
+                                "response.output_text.delta", "response.output_text.done"):
+                            if ev.get("delta") or ev.get("type", "").endswith(".done"):
+                                ttft = time.time() - t0
+                        if ev.get("type") == "response.completed":
+                            usage = ((ev.get("response") or {}).get("usage") or {})
+                            out_tokens = usage.get("output_tokens") or out_tokens
+                            break
+            if ttft is None and err is None:
+                ttft = time.time() - t0
+        else:
+            body = json.loads(resp.read().decode("utf-8", "ignore"))
+            ttft = time.time() - t0
+            usage = body.get("usage") or ((body.get("response") or {}).get("usage")) or {}
+            out_tokens = usage.get("output_tokens") or usage.get("completion_tokens") or 0
+    except urllib.error.HTTPError as e:
+        try:
+            detail = e.read()[:200].decode("utf-8", "ignore")
+        except Exception:
+            detail = ""
+        err = f"HTTP {e.code} {detail}"
+    except Exception as e:
+        err = str(e)[:200]
+    total = time.time() - t0
+    return {"ttft": ttft, "total": total, "out": out_tokens, "ok": err is None,
+            "err": err, "url": url}
+
+
+def cmd_bench(a):
+    db = load_db()
+    p = db["profiles"].get(a.name)
+    if not p:
+        err(f"没有名为 {a.name} 的配置")
+        sys.exit(2)
+    lines = []
+    if p.get("claude_key") and a.client in ("both", "claude"):
+        lines.append(("Claude", p.get("claude_base"), p.get("claude_key"), p.get("claude_model")))
+    if p.get("codex_key") and a.client in ("both", "codex"):
+        lines.append(("Codex", p.get("codex_base"), p.get("codex_key"), p.get("codex_model")))
+    if not lines:
+        err("该配置没有可测的线路")
+        sys.exit(2)
+    if not a.quiet:
+        warn(f"将发起 {len(lines) * a.runs} 次真实请求(会产生少量用量),prompt: {a.prompt!r}")
+    report = {}
+    for kind, base, key, model in lines:
+        rows = []
+        for i in range(a.runs):
+            r = _bench_once(kind.lower(), base, key, model, a.prompt,
+                            not a.no_stream, a.timeout)
+            rows.append(r)
+            if not a.json:
+                if r["ok"]:
+                    ttft = f"{r['ttft'] * 1000:.0f} ms" if r["ttft"] is not None else "-"
+                    gen = r["total"] - (r["ttft"] or 0)
+                    tps = (r["out"] / gen) if (r["out"] >= 2 and gen > 0.2) else None
+                    tps_s = f"{tps:.1f} tok/s" if tps else "-"
+                    print(f"  {kind} #{i + 1}  首字 {ttft:<10} 总耗时 {r['total']:.2f}s   "
+                          f"输出 {r['out']} tok   {tps_s}")
+                else:
+                    print(f"  {kind} #{i + 1}  {c('失败', '31')}  {r['err']}")
+        ok_rows = [r for r in rows if r["ok"]]
+        report[kind] = {
+            "url": rows[0]["url"] if rows else "",
+            "runs": len(rows),
+            "ok": len(ok_rows),
+            "ttft_ms_avg": round(sum(r["ttft"] for r in ok_rows) / len(ok_rows) * 1000, 1) if ok_rows else None,
+            "ttft_ms_min": round(min(r["ttft"] for r in ok_rows) * 1000, 1) if ok_rows else None,
+            "total_s_avg": round(sum(r["total"] for r in ok_rows) / len(ok_rows), 2) if ok_rows else None,
+            "out_tokens_avg": round(sum(r["out"] for r in ok_rows) / len(ok_rows), 1) if ok_rows else None,
+            "errors": [r["err"] for r in rows if not r["ok"]],
+        }
+    if a.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    else:
+        print()
+        print(bold(f"{'线路':<8}{'成功率':<10}{'首字均值':<12}{'首字最快':<12}{'总耗时均值':<12}输出tok"))
+        print(dim("-" * 68))
+        for kind, r in report.items():
+            rate = f"{r['ok']}/{r['runs']}"
+            t_avg = f"{r['ttft_ms_avg']:.0f} ms" if r["ttft_ms_avg"] is not None else "-"
+            t_min = f"{r['ttft_ms_min']:.0f} ms" if r["ttft_ms_min"] is not None else "-"
+            tot = f"{r['total_s_avg']:.2f} s" if r["total_s_avg"] is not None else "-"
+            print(f"{kind:<8}{rate:<10}{t_avg:<12}{t_min:<12}{tot:<12}{r['out_tokens_avg'] or 0:g}")
+    return 0 if all(r["ok"] == r["runs"] for r in report.values()) else 1
+
+
 # ---------------------------------------------------------------- commands
 
 def cmd_add(a):
@@ -648,6 +817,17 @@ def build_parser():
     sp.add_argument("name", nargs="?")
     sp.add_argument("--models", action="store_true", help="列出模型清单")
     sp.set_defaults(func=cmd_doctor)
+
+    sp = sub.add_parser("bench", help="首字延迟 / 吞吐实测(会产生少量用量)")
+    sp.add_argument("name")
+    sp.add_argument("--client", choices=["both", "claude", "codex"], default="both")
+    sp.add_argument("--runs", type=int, default=2, help="每条线路测几次(默认 2)")
+    sp.add_argument("--prompt", default=DEFAULT_BENCH_PROMPT, help="测试用的提示词")
+    sp.add_argument("--no-stream", action="store_true", help="非流式(只测总耗时)")
+    sp.add_argument("--timeout", type=float, default=120.0)
+    sp.add_argument("--json", action="store_true", help="输出 JSON")
+    sp.add_argument("-q", "--quiet", action="store_true", help="不打印费用提醒")
+    sp.set_defaults(func=cmd_bench)
 
     sp = sub.add_parser("remove", help="删除配置")
     sp.add_argument("name")

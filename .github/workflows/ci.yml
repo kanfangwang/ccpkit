@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags-ignore: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: ${{ matrix.os }} / py${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.8", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Syntax check
+        run: python -m py_compile ccpkit.py
+
+      - name: CLI smoke test (offline, isolated config dirs)
+        shell: bash
+        env:
+          CCPKIT_HOME: ${{ runner.temp }}/ccpkit-ci
+          CCPKIT_CLAUDE_DIR: ${{ runner.temp }}/ccpkit-ci
+          CCPKIT_CODEX_DIR: ${{ runner.temp }}/ccpkit-ci
+        run: |
+          set -e
+          python ccpkit.py --version
+          python ccpkit.py presets | tee /dev/stderr | grep -q "mdd"
+          python ccpkit.py add ci --preset mdd \
+            --claude-key sk-test-1234567890 --codex-key sk-test-0987654321 -y --use
+          python ccpkit.py list
+          python ccpkit.py show ci
+          python ccpkit.py env ci --shell bash | grep -q ANTHROPIC_BASE_URL
+          python ccpkit.py env ci --shell powershell | grep -q 'OPENAI_API_KEY'
+          grep -q "api.mddtech.cn/p" "$CCPKIT_HOME/.claude/settings.json"
+          grep -q "model_provider" "$CCPKIT_HOME/.codex/config.toml"
+          grep -q "OPENAI_API_KEY" "$CCPKIT_HOME/.codex/auth.json"
+          # add a second profile with only one client, then switch back (backup path)
+          python ccpkit.py add solo -y --claude-key sk-test-2222222222 --use --client claude
+          ls "$CCPKIT_HOME/.claude/" | grep -q "ccpkit-bak"
+          python ccpkit.py restore --client claude
+          python ccpkit.py remove solo -y
+          python ccpkit.py remove ci -y
+          echo "smoke test passed"

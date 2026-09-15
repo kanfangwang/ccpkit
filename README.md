@@ -8,6 +8,7 @@ Official API, relay/mirror, or your own self-hosted gateway — keep several pro
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue)]()
 [![License](https://img.shields.io/badge/license-MIT-green)]()
 [![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)]()
+[![CI](https://github.com/kanfangwang/ccpkit/actions/workflows/ci.yml/badge.svg)](https://github.com/kanfangwang/ccpkit/actions/workflows/ci.yml)
 
 ---
 
@@ -72,6 +73,10 @@ ccpkit use myrelay --client codex
 # check every line: alive? latency? is my model there?
 ccpkit doctor myrelay --models
 
+# measure first-token latency and throughput (spends a few tokens)
+ccpkit bench myrelay --runs 3
+ccpkit bench myrelay --json
+
 # list / inspect / remove
 ccpkit list
 ccpkit show myrelay
@@ -90,6 +95,26 @@ Example `doctor` output:
           - gpt-5.5
 全部正常
 ```
+
+Example `bench` output (`--runs 2`, streaming):
+
+```
+$ ccpkit bench myrelay --runs 2
+! 将发起 4 次真实请求(会产生少量用量),prompt: 'Reply with exactly: OK'
+  Claude #1  首字 1785 ms    总耗时 1.78s   输出 1 tok   -
+  Claude #2  首字 2119 ms    总耗时 2.12s   输出 1 tok   -
+
+线路      成功率       首字均值        首字最快    总耗时均值  输出tok
+--------------------------------------------------------------------
+Claude    2/2       1952 ms     1785 ms     1.95 s      1
+```
+
+Numbers are illustrative and vary a lot by provider and time of day — the same relay
+has been measured anywhere from 0.7 s to 27 s first-token in a single session, which
+is exactly why the `bench` command exists.
+
+`bench` also takes `--json` for machine-readable output, `--no-stream` for gateways
+without SSE, `--runs N`, and `--prompt "..."` to test your own workload.
 
 ## Providers & presets
 
