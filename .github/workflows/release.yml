@@ -6,6 +6,9 @@ on:
 
 permissions:
   contents: write
+  # Trusted Publishing: GitHub 用这个身份直接向 PyPI 证明"我是这个仓库",
+  # 不需要任何 API token / secret。
+  id-token: write
 
 jobs:
   release:
@@ -40,23 +43,36 @@ jobs:
           PY
           python ccpkit.py --version
 
-      - name: Build wheel
+      - name: Build sdist + wheel
         run: |
           python -m pip install --quiet --upgrade build
-          python -m build --wheel
+          python -m build
 
-      - name: Publish release (single-file CLI + wheel attached)
+      - name: Check the built artifacts
+        run: |
+          python -m pip install --quiet --upgrade twine
+          python -m twine check dist/*
+
+      - name: Publish to PyPI (Trusted Publishing, no token)
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+      - name: Create GitHub Release (single-file CLI + artifacts)
         uses: softprops/action-gh-release@v2
         with:
           files: |
             ccpkit.py
-            dist/*.whl
+            dist/*
           generate_release_notes: true
           body: |
-            Single-file CLI: download `ccpkit.py` below and run `python ccpkit.py --help`.
+            **Install**
 
             ```bash
-            # no install needed
+            pipx install ccpkit        # or: pip install ccpkit
+            ```
+
+            Or run the single file with no install at all:
+
+            ```bash
             curl -LO https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ccpkit.py
             python ccpkit.py --version
             ```

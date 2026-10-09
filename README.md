@@ -31,22 +31,26 @@ profile and writes the right config for you — with automatic backups.
 
 ## Install
 
-Pick one:
-
 ```bash
 # 1) pipx (recommended)
-pipx install git+https://github.com/kanfangwang/ccpkit.git
+pipx install ccpkit
 
-# 2) uv
-uvx --from git+https://github.com/kanfangwang/ccpkit.git ccpkit --help
+# 2) pip
+pip install ccpkit
 
-# 3) plain python — just download the file
+# 3) uv
+uvx ccpkit --help
+
+# 4) no install at all — just download the single file
 curl -LO https://raw.githubusercontent.com/kanfangwang/ccpkit/main/ccpkit.py
 python ccpkit.py --help
 
-# 4) Windows PowerShell one-liner
+# 5) Windows PowerShell one-liner
 irm https://raw.githubusercontent.com/kanfangwang/ccpkit/main/ccpkit.py -OutFile ccpkit.py; python ccpkit.py --help
 ```
+
+> If `pip` cannot find it, your mirror may not have synced yet — add
+> `--index-url https://pypi.org/simple/` to pull straight from PyPI.
 
 ## Quick start
 
@@ -190,10 +194,10 @@ Use Windows Terminal, or set `chcp 65001`. The tool falls back to ASCII markers 
 
 ## Roadmap
 
-- [ ] `ccpkit bench` — measure first-token latency and throughput
-- [ ] provider presets (`ccpkit add --preset openai|anthropic`)
 - [ ] `ccpkit usage` — daily token / cost report from local session logs
+- [ ] Publish to PyPI so `pipx install ccpkit` works without cloning
 - [ ] Homebrew / Scoop formula
+- [ ] `ccpkit switch` — swap only the model, keep the provider
 
 ## License
 
