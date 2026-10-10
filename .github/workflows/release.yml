@@ -45,18 +45,11 @@ jobs:
 
       - name: Build sdist + wheel
         run: |
-          python -m pip install --quiet --upgrade build
+          python -m pip install --quiet --upgrade build twine
           python -m build
-
-      - name: Check the built artifacts
-        run: |
-          python -m pip install --quiet --upgrade twine
           python -m twine check dist/*
 
-      - name: Publish to PyPI (Trusted Publishing, no token)
-        uses: pypa/gh-action-pypi-publish@release/v1
-
-      - name: Create GitHub Release (single-file CLI + artifacts)
+      - name: Create GitHub Release (source + package)
         uses: softprops/action-gh-release@v2
         with:
           files: |
@@ -64,15 +57,71 @@ jobs:
             dist/*
           generate_release_notes: true
           body: |
-            **Install**
+            ## Install
 
             ```bash
             pipx install ccpkit        # or: pip install ccpkit
             ```
 
-            Or run the single file with no install at all:
+            ## Windows: no Python needed
+
+            Download **`ccpkit.exe`** below and double-click it — that opens the
+            visual config manager in your browser. No install, no command line.
+
+            Or use it as a CLI:
+
+            ```powershell
+            .\ccpkit.exe list
+            .\ccpkit.exe doctor myrelay
+            .\ccpkit.exe ui
+            ```
+
+            Single-file run (any OS, no install):
 
             ```bash
             curl -LO https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ccpkit.py
             python ccpkit.py --version
             ```
+
+      - name: Publish to PyPI (Trusted Publishing, no token)
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  windows-exe:
+    # 单独一个 Windows runner 来出 exe —— 在 Linux 上交叉编译 Windows 单文件
+    # 程序出来的东西不能保证能用,不如直接用 windows-latest。
+    needs: release
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Sync version from the tag (same as the release job)
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os, pathlib, re
+          v = os.environ["GITHUB_REF_NAME"].lstrip("v")
+          for path, pat in (("pyproject.toml", r'^version = ".*"$'),
+                            ("ccpkit.py", r'^VERSION = ".*"$')):
+              p = pathlib.Path(path)
+              s = p.read_text(encoding="utf-8")
+              new, n = re.subn(pat, f'version = "{v}"' if path.endswith(".toml") else f'VERSION = "{v}"',
+                               s, count=1, flags=re.M)
+              assert n == 1, f"version line not found in {path}"
+              p.write_text(new, encoding="utf-8")
+          print("version ->", v)
+          PY
+
+      - name: Build the single-file exe
+        run: |
+          python -m pip install --quiet --upgrade pyinstaller
+          python -m PyInstaller --onefile --console --name ccpkit --icon assets/ccpkit.ico --distpath dist --workpath build --specpath build --noconfirm ccpkit.py
+          .\dist\ccpkit.exe --version
+
+      - name: Attach ccpkit.exe to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/ccpkit.exe

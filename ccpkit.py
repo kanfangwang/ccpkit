@@ -35,7 +35,7 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 MANAGED_BEGIN = "# >>> ccpkit begin"
 MANAGED_END = "# <<< ccpkit end"
 
@@ -781,6 +781,562 @@ def cmd_restore(a):
 
 # ---------------------------------------------------------------- main
 
+# ---------------------------------------------------------------- web UI
+
+UI_HTML = r"""<!doctype html>
+<html lang="zh-CN"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ccpkit · 配置管理</title>
+<style>
+:root{--bg:#0f1115;--card:#171b23;--card2:#1d222c;--line:#2a3040;--fg:#e6e9f0;--dim:#8b93a7;
+      --acc:#4f8cff;--ok:#3ecf8e;--warn:#e8a66a;--bad:#f2555a;--mint:#6ae0b0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);
+     font:14px/1.65 -apple-system,"Segoe UI","Microsoft YaHei",system-ui,sans-serif}
+a{color:var(--acc)}
+header{display:flex;align-items:center;justify-content:space-between;gap:16px;
+       padding:15px 26px;border-bottom:1px solid var(--line);background:var(--bg);
+       position:sticky;top:0;z-index:9}
+.brand{font-size:19px;font-weight:700;letter-spacing:.2px}
+.brand em{font-style:normal;font-weight:400;font-size:13px;color:var(--dim);margin-left:9px}
+.cur{font-size:13px;color:var(--dim)}
+.cur b{color:var(--mint);font-weight:600}
+main{max-width:920px;margin:0 auto;padding:24px 20px 80px}
+h2{font-size:13px;font-weight:600;color:var(--dim);margin:26px 0 12px;letter-spacing:.6px}
+h2:first-child{margin-top:0}
+.pcard{background:var(--card);border:1px solid var(--line);border-radius:13px;
+       padding:16px 18px;margin-bottom:11px}
+.pcard.on{border-color:#2f5a3f;background:linear-gradient(180deg,#16241d,var(--card))}
+.prow{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.pname{font-size:16px;font-weight:600;display:flex;align-items:center;gap:9px}
+.dot{width:8px;height:8px;border-radius:50%;background:#3a4152;flex:0 0 auto}
+.pcard.on .dot{background:var(--ok);box-shadow:0 0 0 4px rgba(62,207,142,.14)}
+.tag{font-size:11px;padding:2px 8px;border-radius:20px;border:1px solid var(--line);color:var(--dim)}
+.line{display:flex;gap:10px;font-size:12.5px;color:var(--dim);margin-top:9px;flex-wrap:wrap}
+.line .k{flex:0 0 52px;color:#6d7488}
+.line .v{color:#b9c0d0;word-break:break-all}
+.line .mono{font-family:ui-monospace,Consolas,monospace}
+.btns{display:flex;gap:7px;flex-wrap:wrap}
+button{font:inherit;font-size:12.5px;padding:6px 13px;border-radius:9px;cursor:pointer;
+       border:1px solid var(--line);background:var(--card2);color:var(--fg);transition:.13s}
+button:hover{border-color:#3d465c;background:#252b37}
+button.pri{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}
+button.pri:hover{background:#3f7cf0}
+button.gh{background:transparent}
+button.dg{color:var(--bad);border-color:#3a2529}
+button.dg:hover{background:#2a1a1d;border-color:#5a2b31}
+button:disabled{opacity:.45;cursor:not-allowed}
+.modal{position:fixed;inset:0;background:rgba(5,7,10,.72);display:none;z-index:50;
+       align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto}
+.modal.show{display:flex}
+.sheet{background:var(--card);border:1px solid var(--line);border-radius:15px;
+       width:100%;max-width:660px;padding:22px 24px}
+.sheet h3{margin:0 0 4px;font-size:17px}
+.sheet p.sub{margin:0 0 18px;font-size:12.5px;color:var(--dim)}
+fieldset{border:1px solid var(--line);border-radius:11px;padding:13px 15px 15px;margin:0 0 14px}
+legend{font-size:12px;color:var(--dim);padding:0 7px}
+label{display:block;font-size:12px;color:var(--dim);margin:10px 0 4px}
+label:first-child{margin-top:0}
+input,select{width:100%;font:inherit;font-size:13px;padding:8px 11px;border-radius:8px;
+       border:1px solid var(--line);background:#12161d;color:var(--fg);outline:none}
+input:focus,select:focus{border-color:var(--acc)}
+.hint{font-size:11.5px;color:#6d7488;margin-top:4px}
+pre{background:#0b0e13;border:1px solid var(--line);border-radius:10px;padding:12px 14px;
+    font:12px/1.6 ui-monospace,Consolas,monospace;overflow:auto;max-height:320px;
+    white-space:pre-wrap;word-break:break-all;margin:9px 0 0;color:#c5cbd8}
+.bar{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+.res{font-size:12.5px;margin-top:9px;padding:9px 12px;border-radius:9px;background:#12161d;
+     border:1px solid var(--line);white-space:pre-wrap;font-family:ui-monospace,Consolas,monospace}
+.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+.toast{position:fixed;right:20px;bottom:20px;background:var(--card2);border:1px solid var(--line);
+       border-left:3px solid var(--acc);border-radius:10px;padding:11px 16px;font-size:13px;
+       opacity:0;transform:translateY(8px);transition:.2s;pointer-events:none;max-width:420px;z-index:99}
+.toast.show{opacity:1;transform:none}
+.toast.good{border-left-color:var(--ok)}
+.toast.bad{border-left-color:var(--bad)}
+.foot{margin-top:26px;font-size:11.5px;color:#5d6478;line-height:1.9}
+.foot code{background:#12161d;padding:1px 6px;border-radius:5px;border:1px solid var(--line)}
+</style></head>
+<body>
+<header>
+  <div class="brand">ccpkit<em>配置管理</em></div>
+  <div class="cur">当前生效 <b id="curName">—</b></div>
+</header>
+<main>
+  <h2>所有配置</h2>
+  <div id="list"></div>
+  <div style="margin-top:14px"><button class="pri" onclick="openEditor('')">+ 新增配置</button></div>
+
+  <h2>客户端配置文件</h2>
+  <div class="pcard">
+    <div class="btns">
+      <button onclick="showFile('claude')">查看 Claude Code 配置</button>
+      <button onclick="showFile('codex')">查看 Codex CLI 配置</button>
+      <button class="gh" onclick="doRestore('claude')">恢复 Claude 备份</button>
+      <button class="gh" onclick="doRestore('codex')">恢复 Codex 备份</button>
+    </div>
+    <pre id="fileBox" style="display:none"></pre>
+  </div>
+
+  <div class="foot">
+    切换后 <b>需要重开终端 / 重启客户端</b> —— 它们只在启动时读一次配置。<br>
+    所有 key 只存在本地 <code id="pProfiles"></code>,只有当前生效的那把会被写进客户端配置。
+  </div>
+</main>
+
+<div class="modal" id="editor"><div class="sheet">
+  <h3 id="edTitle">新增配置</h3>
+  <p class="sub">一个配置 = 一组 Claude 和/或 Codex 的地址 + key。两边都可以只填一边。</p>
+  <label>配置名</label>
+  <input id="f_name" placeholder="例如:麦多 / 官方 / 自建">
+  <label>从预设填入(可选)</label>
+  <select id="f_preset" onchange="applyPreset()"><option value="">— 不选 —</option></select>
+
+  <fieldset><legend>Claude Code</legend>
+    <label>接口地址 ANTHROPIC_BASE_URL</label>
+    <input id="f_cbase" placeholder="https://api.example.com/p">
+    <label>Key ANTHROPIC_AUTH_TOKEN</label>
+    <input id="f_ckey" placeholder="留空 = 不改动已有的 key">
+    <label>默认模型 ANTHROPIC_MODEL(可选)</label>
+    <input id="f_cmodel" placeholder="claude-sonnet-5">
+  </fieldset>
+
+  <fieldset><legend>Codex CLI</legend>
+    <label>接口地址 OPENAI_BASE_URL</label>
+    <input id="f_obase" placeholder="https://api.example.com/p/v1">
+    <label>Key OPENAI_API_KEY</label>
+    <input id="f_okey" placeholder="留空 = 不改动已有的 key">
+    <label>默认模型(可选)</label>
+    <input id="f_omodel" placeholder="gpt-5.5">
+  </fieldset>
+
+  <div class="bar">
+    <button class="gh" onclick="closeEditor()">取消</button>
+    <button class="pri" onclick="saveProfile()">保存</button>
+  </div>
+</div></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const T = new URLSearchParams(location.search).get('t') || '';
+let ST = null, ORIG = '';
+
+function toast(msg, kind){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show' + (kind ? ' ' + kind : '');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.className = 'toast', 2600);
+}
+function esc(s){ return (s == null ? '' : String(s)).replace(/[&<>"]/g,
+  m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
+function mask(base, tail){
+  if (!base) return '<span class="warn">未配置</span>';
+  return esc(base) + (tail ? ' <span class="mono">…' + esc(tail) + '</span>' : ' <span class="warn">无 key</span>');
+}
+
+async function api(path, body){
+  const opt = { method: body ? 'POST' : 'GET', headers: {'Content-Type':'application/json'} };
+  if (body) opt.body = JSON.stringify(body);
+  const sep = path.includes('?') ? '&' : '?';
+  const r = await fetch(path + sep + 't=' + encodeURIComponent(T), opt);
+  return await r.json().catch(() => ({ok:false, error:'返回不是 JSON'}));
+}
+
+async function load(){
+  const r = await api('/api/state');
+  if (!r.ok){ toast('读取失败:' + (r.error || ''), 'bad'); return; }
+  ST = r.state;
+  render();
+}
+
+function render(){
+  const cur = ST.current || {};
+  document.getElementById('curName').textContent =
+    cur.claude || cur.codex ? (cur.claude || cur.codex) : '(未切换过)';
+  document.getElementById('pProfiles').textContent = ST.paths.profiles;
+
+  const box = document.getElementById('list');
+  if (!ST.profiles.length){
+    box.innerHTML = '<div class="pcard" style="color:var(--dim)">还没有配置,点下面的「新增配置」。</div>';
+    return;
+  }
+  box.innerHTML = ST.profiles.map(p => {
+    const on = (cur.claude === p.name) || (cur.codex === p.name);
+    const which = [cur.claude === p.name ? 'Claude' : '', cur.codex === p.name ? 'Codex' : '']
+      .filter(Boolean).join(' + ');
+    return '<div class="pcard' + (on ? ' on' : '') + '">'
+      + '<div class="prow"><div class="pname"><span class="dot"></span>' + esc(p.name)
+      + (on ? ' <span class="tag ok">当前' + (which ? ' · ' + which : '') + '</span>' : '') + '</div>'
+      + '<div class="btns">'
+      + '<button class="pri" onclick="doUse(\'' + esc(p.name) + '\',\'both\')">切换</button>'
+      + '<button onclick="doDoctor(\'' + esc(p.name) + '\')">自检</button>'
+      + '<button onclick="openEditor(\'' + esc(p.name) + '\')">编辑</button>'
+      + '<button class="dg" onclick="doDelete(\'' + esc(p.name) + '\')">删除</button>'
+      + '</div></div>'
+      + '<div class="line"><span class="k">Claude</span><span class="v">'
+      + mask(p.claude_base, p.claude_key_tail) + (p.claude_model ? ' · ' + esc(p.claude_model) : '') + '</span></div>'
+      + '<div class="line"><span class="k">Codex</span><span class="v">'
+      + mask(p.codex_base, p.codex_key_tail) + (p.codex_model ? ' · ' + esc(p.codex_model) : '') + '</span></div>'
+      + '<div id="res_' + esc(p.name) + '"></div>'
+      + '</div>';
+  }).join('');
+
+  const sel = document.getElementById('f_preset');
+  if (sel.options.length <= 1){
+    ST.presets.forEach(n => {
+      const o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o);
+    });
+  }
+}
+
+async function doUse(name, client){
+  const r = await api('/api/use', {name: name, client: client});
+  if (!r.ok){ toast('切换失败:' + (r.error || ''), 'bad'); return; }
+  ST = r.state; render();
+  toast('已切换到 ' + name + ' —— 记得重开终端', 'good');
+}
+async function doDelete(name){
+  if (!confirm('删除配置「' + name + '」?\n(不会动客户的配置文件,只删这条记录)')) return;
+  const r = await api('/api/delete', {name: name});
+  if (!r.ok){ toast('删除失败:' + (r.error || ''), 'bad'); return; }
+  ST = r.state; render(); toast('已删除 ' + name);
+}
+async function doDoctor(name){
+  const el = document.getElementById('res_' + name);
+  el.innerHTML = '<div class="res">检查中…(最多十几秒)</div>';
+  const r = await api('/api/doctor', {name: name});
+  if (!r.ok){ el.innerHTML = '<div class="res bad">' + esc(r.error || '失败') + '</div>'; return; }
+  el.innerHTML = '<div class="res">' + r.lines.map(l =>
+      '<span class="' + l.cls + '">' + esc(l.text) + '</span>').join('\n') + '</div>';
+}
+async function showFile(which){
+  const r = await api('/api/file?which=' + which);
+  const b = document.getElementById('fileBox');
+  b.style.display = 'block';
+  b.textContent = r.ok ? (r.path + '\n\n' + r.text) : ('读取失败:' + (r.error || ''));
+}
+async function doRestore(client){
+  if (!confirm('把 ' + client + ' 的配置恢复到最近一次备份?')) return;
+  const r = await api('/api/restore', {client: client});
+  toast(r.ok ? (r.message || '已恢复') : ('恢复失败:' + (r.error || '')), r.ok ? 'good' : 'bad');
+}
+
+function openEditor(name){
+  ORIG = name;
+  const p = name ? ST.profiles.find(x => x.name === name) : null;
+  document.getElementById('edTitle').textContent = name ? ('编辑「' + name + '」') : '新增配置';
+  document.getElementById('f_name').value = name || '';
+  document.getElementById('f_preset').value = '';
+  document.getElementById('f_cbase').value = p ? (p.claude_base || '') : '';
+  document.getElementById('f_cmodel').value = p ? (p.claude_model || '') : '';
+  document.getElementById('f_obase').value = p ? (p.codex_base || '') : '';
+  document.getElementById('f_omodel').value = p ? (p.codex_model || '') : '';
+  document.getElementById('f_ckey').value = '';
+  document.getElementById('f_okey').value = '';
+  document.getElementById('f_ckey').placeholder = p && p.claude_key_set
+    ? '留空 = 保持现在的 key(…' + p.claude_key_tail + ')' : 'sk-…';
+  document.getElementById('f_okey').placeholder = p && p.codex_key_set
+    ? '留空 = 保持现在的 key(…' + p.codex_key_tail + ')' : 'sk-…';
+  document.getElementById('editor').classList.add('show');
+}
+function closeEditor(){ document.getElementById('editor').classList.remove('show'); }
+function applyPreset(){
+  const v = document.getElementById('f_preset').value;
+  if (!v) return;
+  const nm = document.getElementById('f_name');
+  if (!nm.value) nm.value = v;
+  if (PRESET_MAP[v]){
+    document.getElementById('f_cbase').value = PRESET_MAP[v].claude_base || '';
+    document.getElementById('f_obase').value = PRESET_MAP[v].codex_base || '';
+    document.getElementById('f_cmodel').value = PRESET_MAP[v].claude_model || '';
+    document.getElementById('f_omodel').value = PRESET_MAP[v].codex_model || '';
+  }
+}
+async function saveProfile(){
+  const b = {
+    name: document.getElementById('f_name').value.trim(),
+    orig: ORIG,
+    claude_base: document.getElementById('f_cbase').value.trim(),
+    claude_key: document.getElementById('f_ckey').value.trim(),
+    claude_model: document.getElementById('f_cmodel').value.trim(),
+    codex_base: document.getElementById('f_obase').value.trim(),
+    codex_key: document.getElementById('f_okey').value.trim(),
+    codex_model: document.getElementById('f_omodel').value.trim()
+  };
+  if (!b.name){ toast('配置名不能为空', 'bad'); return; }
+  const r = await api('/api/save', b);
+  if (!r.ok){ toast('保存失败:' + (r.error || ''), 'bad'); return; }
+  ST = r.state; render(); closeEditor(); toast('已保存 ' + b.name, 'good');
+}
+let PRESET_MAP = {};
+document.addEventListener('DOMContentLoaded', async () => {
+  await load();
+  const r = await api('/api/presets');
+  if (r.ok) PRESET_MAP = r.presets || {};
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeEditor(); });
+</script>
+</body></html>
+"""
+
+
+def _ui_state() -> dict:
+    db = load_db()
+    profs = []
+    for name, p in db["profiles"].items():
+        profs.append({
+            "name": name,
+            "claude_base": p.get("claude_base", ""),
+            "claude_model": p.get("claude_model", ""),
+            "claude_key_set": bool(p.get("claude_key")),
+            "claude_key_tail": (p.get("claude_key") or "")[-4:],
+            "codex_base": p.get("codex_base", ""),
+            "codex_model": p.get("codex_model", ""),
+            "codex_key_set": bool(p.get("codex_key")),
+            "codex_key_tail": (p.get("codex_key") or "")[-4:],
+        })
+    cur = db.get("current") or {}
+    return {
+        "profiles": profs,
+        "current": {"claude": cur.get("claude", ""), "codex": cur.get("codex", "")},
+        "presets": sorted(PRESETS.keys()),
+        "paths": {
+            "profiles": str(profiles_path()),
+            "claude": str(claude_dir() / "settings.json"),
+            "codex": str(codex_dir() / "config.toml"),
+        },
+    }
+
+
+def cmd_ui(a):
+    """本地可视化界面。
+
+    只绑 127.0.0.1,并且每次启动生成一个随机 token —— 因为浏览器里任何一个
+    网页都能往 127.0.0.1 发请求(CSRF / DNS rebinding),没有 token 的话
+    别人一个网页就能把你的 key 换掉。
+    """
+    import contextlib
+    import http.server
+    import io as _io
+    import secrets
+    import socket
+    import threading
+    import webbrowser
+    from urllib.parse import urlparse, parse_qs
+
+    token = secrets.token_urlsafe(18)
+
+    def free_port(start):
+        for p in range(start, start + 60):
+            with socket.socket() as s:
+                try:
+                    s.bind(("127.0.0.1", p))
+                    return p
+                except OSError:
+                    continue
+        raise SystemExit("找不到空闲端口")
+
+    port = a.port or free_port(8787)
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        server_version = "ccpkit-ui"
+        protocol_version = "HTTP/1.1"
+
+        def log_message(self, *args):        # 别把访问日志打到终端
+            pass
+
+        def _send(self, code, body, ctype="application/json; charset=utf-8"):
+            if isinstance(body, str):
+                body = body.encode("utf-8")
+            self.send_response(code)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            self.wfile.write(body)
+
+        def _json(self, obj, code=200):
+            self._send(code, json.dumps(obj, ensure_ascii=False))
+
+        def _host_ok(self):
+            h = (self.headers.get("Host") or "").split(":")[0].strip("[]")
+            return h in ("127.0.0.1", "localhost", "::1")
+
+        def _auth(self, q):
+            if not self._host_ok():
+                self._json({"ok": False, "error": "host not allowed"}, 403)
+                return False
+            if q.get("t", [""])[0] != token:
+                self._json({"ok": False, "error": "token 不正确"}, 403)
+                return False
+            return True
+
+        def _body(self):
+            try:
+                n = int(self.headers.get("Content-Length") or 0)
+                return json.loads(self.rfile.read(n) or b"{}") if n else {}
+            except Exception:
+                return {}
+
+        def do_GET(self):
+            u = urlparse(self.path)
+            q = parse_qs(u.query)
+            if u.path == "/":
+                if q.get("t", [""])[0] != token:
+                    self._send(403, "token 不正确", "text/plain; charset=utf-8")
+                    return
+                self._send(200, UI_HTML, "text/html; charset=utf-8")
+                return
+            if not self._auth(q):
+                return
+            if u.path == "/api/state":
+                self._json({"ok": True, "state": _ui_state()})
+            elif u.path == "/api/presets":
+                self._json({"ok": True, "presets": PRESETS})
+            elif u.path == "/api/file":
+                which = q.get("which", ["claude"])[0]
+                f = (claude_dir() / "settings.json") if which == "claude" else (codex_dir() / "config.toml")
+                if f.exists():
+                    try:
+                        txt = f.read_text(encoding="utf-8")
+                    except Exception as e:
+                        txt = "(读取失败: %s)" % e
+                else:
+                    txt = "(文件还不存在 —— 还没有切换过)"
+                self._json({"ok": True, "path": str(f), "text": txt})
+            else:
+                self._json({"ok": False, "error": "not found"}, 404)
+
+        def do_POST(self):
+            u = urlparse(self.path)
+            q = parse_qs(u.query)
+            if not self._auth(q):
+                return
+            b = self._body()
+            try:
+                if u.path == "/api/use":
+                    db = load_db()
+                    buf = _io.StringIO()
+                    with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+                        apply_profile(db, b.get("name", ""), b.get("client", "both"))
+                    save_db(db)
+                    self._json({"ok": True, "log": buf.getvalue(), "state": _ui_state()})
+
+                elif u.path == "/api/save":
+                    db = load_db()
+                    name = (b.get("name") or "").strip()
+                    if not name:
+                        self._json({"ok": False, "error": "配置名不能为空"}, 400)
+                        return
+                    old = (b.get("orig") or "").strip()
+                    if old and old != name:
+                        db["profiles"].pop(old, None)
+                        for k in ("claude", "codex"):
+                            if (db.get("current") or {}).get(k) == old:
+                                db["current"][k] = name
+                    prof = db["profiles"].get(name) or {}
+                    prof["name"] = name
+                    for side, pre in (("claude", "claude_"), ("codex", "codex_")):
+                        base = (b.get(side + "_base") or "").strip()
+                        key = (b.get(side + "_key") or "").strip()
+                        model = (b.get(side + "_model") or "").strip()
+                        if base:
+                            prof[pre + "base"] = base
+                        elif not old:
+                            prof.pop(pre + "base", None)
+                        if key:                      # 留空 = 保持原来的 key
+                            prof[pre + "key"] = key
+                        if model:
+                            prof[pre + "model"] = model
+                        else:
+                            prof.pop(pre + "model", None)
+                    db["profiles"][name] = prof
+                    save_db(db)
+                    self._json({"ok": True, "state": _ui_state()})
+
+                elif u.path == "/api/delete":
+                    db = load_db()
+                    name = b.get("name", "")
+                    if name not in db["profiles"]:
+                        self._json({"ok": False, "error": "没有这个配置"}, 404)
+                        return
+                    db["profiles"].pop(name, None)
+                    for k in ("claude", "codex"):
+                        if (db.get("current") or {}).get(k) == name:
+                            db["current"].pop(k, None)
+                    save_db(db)
+                    self._json({"ok": True, "state": _ui_state()})
+
+                elif u.path == "/api/doctor":
+                    db = load_db()
+                    p = db["profiles"].get(b.get("name", ""))
+                    if not p:
+                        self._json({"ok": False, "error": "没有这个配置"}, 404)
+                        return
+                    lines = []
+                    for kind, base, key, model in (
+                        ("Claude", p.get("claude_base"), p.get("claude_key"), p.get("claude_model")),
+                        ("Codex", p.get("codex_base"), p.get("codex_key"), p.get("codex_model")),
+                    ):
+                        if not (base and key):
+                            lines.append({"cls": "warn", "text": "%-7s未配置,跳过" % kind})
+                            continue
+                        r = fetch_models(base, key)
+                        if r["status"] == 200:
+                            n = len(r["models"])
+                            if n == 0:
+                                lines.append({"cls": "ok", "text": "%-7sOK    延迟 %.0f ms  (接口可用,未返回模型清单)"
+                                              % (kind, r["ms"])})
+                            else:
+                                extra = ""
+                                if model:
+                                    extra = ("  模型可用" if model in r["models"]
+                                             else "  但不含 %s" % model)
+                                lines.append({"cls": "ok", "text": "%-7sOK    延迟 %.0f ms  模型 %d 个%s"
+                                              % (kind, r["ms"], n, extra)})
+                        elif r["status"] is None:
+                            lines.append({"cls": "bad", "text": "%-7s连接失败  %s" % (kind, r["error"])})
+                        else:
+                            lines.append({"cls": "bad", "text": "%-7sHTTP %s  %s" % (kind, r["status"], r["url"])})
+                    self._json({"ok": True, "lines": lines})
+
+                elif u.path == "/api/restore":
+                    client = b.get("client", "claude")
+                    if client == "claude":
+                        target = claude_dir() / "settings.json"
+                    else:
+                        target = codex_dir() / "config.toml"
+                    baks = sorted(target.parent.glob(target.name + ".ccpkit-bak-*"))
+                    if not baks:
+                        self._json({"ok": False, "error": "没有找到备份"})
+                        return
+                    shutil.copy2(baks[-1], target)
+                    self._json({"ok": True, "message": "已恢复 %s(来源 %s)" % (target.name, baks[-1].name)})
+
+                else:
+                    self._json({"ok": False, "error": "not found"}, 404)
+            except SystemExit:
+                self._json({"ok": False, "error": "配置有误(缺少地址或 key)"}, 400)
+            except Exception as e:
+                self._json({"ok": False, "error": "%s: %s" % (type(e).__name__, e)}, 500)
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    url = "http://127.0.0.1:%d/?t=%s" % (port, token)
+    print(bold("ccpkit 配置管理"))
+    print("  " + url)
+    print(dim("  只监听本机(127.0.0.1),关掉这个窗口就停止。Ctrl+C 退出。"))
+    if not a.no_browser:
+        threading.Timer(0.6, lambda: webbrowser.open(url)).start()
+    try:
+        srv.serve_forever()
+    except KeyboardInterrupt:
+        print("\n" + dim("已停止"))
+
+
 def build_parser():
     p = argparse.ArgumentParser(
         prog="ccpkit",
@@ -807,6 +1363,11 @@ def build_parser():
 
     sp = sub.add_parser("presets", help="列出内置预设线路")
     sp.set_defaults(func=cmd_presets)
+
+    sp = sub.add_parser("ui", help="打开本地可视化界面(浏览器操作,不用记命令)")
+    sp.add_argument("--port", type=int, default=0, help="指定端口(默认自动挑一个空闲的)")
+    sp.add_argument("--no-browser", action="store_true", help="不自动打开浏览器")
+    sp.set_defaults(func=cmd_ui)
 
     sp = sub.add_parser("use", help="切换到某个配置")
     sp.add_argument("name")
@@ -854,6 +1415,17 @@ def build_parser():
 
 
 def main(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+
+    # 打包成 exe 之后,双击启动是没有参数的 —— 那种情况下直接开可视化界面,
+    # 而不是甩一屏命令行帮助出来。pip 装的命令行版本保持原样(在 SSH 里
+    # 莫名其妙拉起浏览器会很讨厌)。
+    if not argv and getattr(sys, "frozen", False):
+        class _UIArgs:
+            port = 0
+            no_browser = False
+        return cmd_ui(_UIArgs()) or 0
+
     parser = build_parser()
     args = parser.parse_args(argv)
     if not getattr(args, "cmd", None):
