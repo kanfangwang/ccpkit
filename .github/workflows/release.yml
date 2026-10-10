@@ -135,7 +135,9 @@ jobs:
       - name: Build the single-file exe
         run: |
           python -m pip install --quiet --upgrade pyinstaller
-          python -m PyInstaller --onefile --console --name ccpkit --icon assets/ccpkit.ico --distpath dist --workpath build --specpath build --noconfirm ccpkit.py
+          # 注意:千万别加 --specpath —— PyInstaller 会把 --icon 的相对路径也
+          # 相对于 specpath 解析,导致 "build/assets/ccpkit.ico not found"。
+          python -m PyInstaller --onefile --console --name ccpkit --icon assets/ccpkit.ico --distpath dist --workpath build --noconfirm ccpkit.py
           .\dist\ccpkit.exe --version
 
       - name: Attach ccpkit.exe to the release

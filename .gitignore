@@ -8,3 +8,6 @@ build/
 .idea/
 .vscode/
 .DS_Store
+
+# PyInstaller 生成的 spec 文件
+*.spec
