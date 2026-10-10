@@ -83,6 +83,23 @@ jobs:
             python ccpkit.py --version
             ```
 
+      - name: Upload dist for the pypi job
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  pypi:
+    # 单独一个 job 发 PyPI —— 这样即使 PyPI 的 Trusted Publisher 还没配好、
+    # 这一步红了,上面的 GitHub Release 和下面的 exe 也照样出得来。
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
       - name: Publish to PyPI (Trusted Publishing, no token)
         uses: pypa/gh-action-pypi-publish@release/v1
 
