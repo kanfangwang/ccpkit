@@ -31,6 +31,25 @@ profile and writes the right config for you — with automatic backups.
 
 ## Install
 
+### Windows — no Python needed
+
+Download **[`ccpkit.exe`](https://github.com/kanfangwang/ccpkit/releases/latest/download/ccpkit.exe)** and double-click it.
+That opens the visual config manager in your browser — no install, no command line, nothing to remember.
+
+You can also use it as a normal CLI:
+
+```powershell
+.\ccpkit.exe list
+.\ccpkit.exe doctor myrelay
+.\ccpkit.exe ui
+```
+
+> The exe is built by GitHub Actions from the tagged source on every release
+> ([workflow](.github/workflows/release.yml)). Windows may show a SmartScreen warning for
+> unsigned binaries — "More info" → "Run anyway".
+
+### Everything else
+
 ```bash
 # 1) pipx (recommended)
 pipx install ccpkit
@@ -51,6 +70,20 @@ irm https://raw.githubusercontent.com/kanfangwang/ccpkit/main/ccpkit.py -OutFile
 
 > If `pip` cannot find it, your mirror may not have synced yet — add
 > `--index-url https://pypi.org/simple/` to pull straight from PyPI.
+
+## Visual config manager
+
+Do not want to remember commands? `ccpkit ui` starts a small local web page:
+
+```bash
+ccpkit ui
+```
+
+Add, edit, switch and health-check profiles by clicking, and see exactly what gets written to each
+client config. It binds to `127.0.0.1` only and is protected by a per-run random token, so nothing
+else on your network (or a random website in your browser) can reach it.
+
+On Windows, double-clicking `ccpkit.exe` with no arguments opens this UI directly.
 
 ## Quick start
 
@@ -195,9 +228,9 @@ Use Windows Terminal, or set `chcp 65001`. The tool falls back to ASCII markers 
 ## Roadmap
 
 - [ ] `ccpkit usage` — daily token / cost report from local session logs
-- [ ] Publish to PyPI so `pipx install ccpkit` works without cloning
 - [ ] Homebrew / Scoop formula
 - [ ] `ccpkit switch` — swap only the model, keep the provider
+- [ ] Code signing for the Windows exe (so SmartScreen stops warning)
 
 ## License
 
