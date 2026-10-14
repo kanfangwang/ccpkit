@@ -123,6 +123,36 @@ ccpkit remove myrelay
 ccpkit env myrelay --shell powershell
 ```
 
+## The `mdd` preset, in three steps
+
+`ccpkit` ships a preset for **麦多 API / MadeMore API** (this project's author also runs that
+relay — it is in here because it is what I use daily, and it is easy to remove if you do not).
+
+```bash
+# 1) add the profile. The preset fills the two endpoints; the keys are yours.
+ccpkit add mdd --preset mdd --claude-key sk-your-key --codex-key sk-your-other-key --use
+
+# 2) do not take my word for it — measure it yourself
+ccpkit doctor mdd
+ccpkit bench mdd --runs 3
+
+# 3) switch away whenever you like; nothing is locked in
+ccpkit use official
+```
+
+Keys: **[api.mddtech.cn](https://api.mddtech.cn/?src=ccpkit)** — one click, no signup, no email,
+free trial credit, prepaid per token with the balance stopping at zero.
+
+What the preset actually contains (nothing hidden):
+
+| | Claude line | Codex line |
+|---|---|---|
+| `base_url` | `https://api.mddtech.cn/p` | `https://api.mddtech.cn/p/v1` |
+| default model | `claude-sonnet-5` | `gpt-5.5` |
+
+**The preset never contains a key.** Keys are only ever supplied by you on the command line, and
+they live in your own `~/.ccpkit/profiles.json` (chmod 600 on POSIX).
+
 Example `doctor` output:
 
 ```
@@ -241,6 +271,36 @@ MIT
 ## 中文说明
 
 `ccpkit` 用来管理 **Claude Code / Codex CLI 的多套 API 线路**(官方、中转、自建网关),一条命令切换。
+
+### 内置的 `mdd` 预设,三步就能用
+
+`ccpkit` 里带了一个 **麦多 API / MadeMore API** 的预设(这个项目的作者也在运营它 ——
+放进来是因为我自己天天用;你要是不需要,删掉一行就行)。
+
+```bash
+# 1) 加线路:预设只填两个地址,key 永远是你自己的
+ccpkit add mdd --preset mdd --claude-key sk-你的key --codex-key sk-另一个key --use
+
+# 2) 别听我说 —— 自己测
+ccpkit doctor mdd
+ccpkit bench mdd --runs 3
+
+# 3) 随时切走,没有锁定
+ccpkit use official
+```
+
+**key 在这里领:[api.mddtech.cn](https://api.mddtech.cn/?src=ccpkit)**
+—— 点一下直接出,不用注册、不用邮箱,送体验额度,按量扣费、余额用完即停。
+
+预设里到底有什么(没有藏东西):
+
+| | Claude 线 | Codex 线 |
+|---|---|---|
+| `base_url` | `https://api.mddtech.cn/p` | `https://api.mddtech.cn/p/v1` |
+| 默认模型 | `claude-sonnet-5` | `gpt-5.5` |
+
+**预设里永远不会含 key。** key 只由你在命令行提供,存在你自己的
+`~/.ccpkit/profiles.json`(POSIX 下 chmod 600)。
 
 ```bash
 # 添加一条线路(不加参数会进入交互式问答)
